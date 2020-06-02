@@ -1,5 +1,5 @@
 from google.cloud import ndb
-from requests import post
+# from requests import post
 VERSION = 'cloud-ndb'
 
 
@@ -28,21 +28,27 @@ def get_or_create_thread():
 
 
 def read_thread():
-  thread = get_or_create_thread()
+  client = ndb.Client()
+  with client.context():
+    thread = get_or_create_thread()
+  resp = ""
   if thread.messages:
     for message in thread.messages:
-      print("#%s: Created in: %s || Text: %s" %
+      resp += ("#%s: Created in: %s || Text: %s\n" %
             (message.number, message.created_by, message.text))
   else:
-    print("No thread messages found.")
+    resp += "No thread messages found."
+  return resp
 
 
 def write_to_thread(text):
-  thread = get_or_create_thread()
-  number = len(thread.messages) + 1
-  message = ThreadMessage(number=number, text=text)
-  thread.messages.append(message)
-  thread.put()
+  client = ndb.Client()
+  with client.context():
+    thread = get_or_create_thread()
+    number = len(thread.messages) + 1
+    message = ThreadMessage(number=number, text=text)
+    thread.messages.append(message)
+    thread.put()
 
 
 def reset_datastore():

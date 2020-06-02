@@ -1,0 +1,13 @@
+runtime: python27
+api_version: 1
+threadsafe: true
+
+libraries:
+  - name: webapp2
+    version: latest
+  - name: grpcio
+    version: 1.0.0
+
+handlers:
+  - url: /.*
+    script: main.app

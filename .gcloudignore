@@ -1,0 +1,24 @@
+# dotfiles
+.gcloudignore
+.git
+.gitignore
+.flake8rc
+.pylintrc
+.python-version
+.yapfignore
+
+# Documentation
+*.md
+
+# VScode settings
+.vscode
+
+# Tools
+*.sh
+requirements.txt
+lib-requirements.txt
+Venv/
+
+# compiled python libraries
+*.pyc
+*/*.pyc

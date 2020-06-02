@@ -1,28 +1,28 @@
-import subprocess
-import sys
-from requests import post
+# import subprocess
+# import sys
+# from requests import post
 VERSION = 'appengine-ndb'
 
-def init_appengine():
-  # default appengine path.
-  appengine_path = subprocess.check_output([
-      'bash', '-c',
-      'echo $(gcloud info --format="value(installation.sdk_root)")/platform/google_appengine'
-  ])
-  appengine_path = appengine_path.strip()
-  sys.path.insert(0, appengine_path)
-  try:
-    import dev_appserver
-  except ImportError:
-    print("ImportError importing dev_appserver. Check appengine_path.")
-    sys.exit(1)
-  dev_appserver.fix_sys_path()
-init_appengine()
+# def init_appengine():
+#   # default appengine path.
+#   appengine_path = subprocess.check_output([
+#       'bash', '-c',
+#       'echo $(gcloud info --format="value(installation.sdk_root)")/platform/google_appengine'
+#   ])
+#   appengine_path = appengine_path.strip()
+#   sys.path.insert(0, appengine_path)
+#   try:
+#     import dev_appserver
+#   except ImportError:
+#     print("ImportError importing dev_appserver. Check appengine_path.")
+#     sys.exit(1)
+#   dev_appserver.fix_sys_path()
+# init_appengine()
 
 from google.appengine.ext import ndb
-context = ndb.get_context()
-context.set_cache_policy(False)
-context.set_memcache_policy(False)
+# context = ndb.get_context()
+# context.set_cache_policy(False)
+# context.set_memcache_policy(False)
 
 
 class ThreadMessage(ndb.Model):
@@ -51,13 +51,14 @@ def get_or_create_thread():
 
 def read_thread():
   thread = get_or_create_thread()
+  resp = ""
   if thread.messages:
     for message in thread.messages:
-      print("#%s: Created in: %s || Text: %s" %
+      resp += ("#%s: Created in: %s || Text: %s\n" %
             (message.number, message.created_by, message.text))
   else:
-    print("No thread messages found.")
-
+    resp += "No thread messages found."
+  return resp
 
 def write_to_thread(text):
   thread = get_or_create_thread()
