@@ -461,6 +461,7 @@ class Key(object):
             )
 
         flat = _get_path(None, kwargs["pairs"])
+        _clean_flat_path(flat)
         project = _project_from_app(kwargs["app"])
         self._key = _key_module.Key(
             *flat, project=project, namespace=kwargs["namespace"]
@@ -759,7 +760,7 @@ class Key(object):
         """
         return google.cloud.datastore.Key(
             self._key.kind,
-            self._key.id,
+            self._key.id or self._key.name,
             namespace=self._key.namespace,
             project=self._key.project,
         ).to_legacy_urlsafe(location_prefix=location_prefix)

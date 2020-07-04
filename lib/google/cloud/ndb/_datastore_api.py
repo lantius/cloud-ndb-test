@@ -14,9 +14,11 @@
 
 """Functions that interact with Datastore backend."""
 
+import grpc
 import itertools
 import logging
 
+from google.api_core import exceptions as core_exceptions
 from google.cloud.datastore import helpers
 from google.cloud.datastore_v1.proto import datastore_pb2
 from google.cloud.datastore_v1.proto import entity_pb2
@@ -80,12 +82,22 @@ def make_call(rpc_name, request, retries=None, timeout=None):
 
     @tasklets.tasklet
     def rpc_call():
+        context = context_module.get_toplevel_context()
+
         call = method.future(request, timeout=timeout)
         rpc = _remote.RemoteCall(call, "{}({})".format(rpc_name, request))
         log.debug(rpc)
         log.debug("timeout={}".format(timeout))
 
-        result = yield rpc
+        try:
+            result = yield rpc
+        except Exception as error:
+            if isinstance(error, grpc.Call):
+                error = core_exceptions.from_grpc_error(error)
+            raise error
+        finally:
+            context.rpc_time += rpc.elapsed_time
+
         raise tasklets.Return(result)
 
     if retries:
@@ -519,6 +531,19 @@ class _NonTransactionalCommitBatch(object):
         rpc.add_done_callback(commit_callback)
 
 
+def prepare_to_commit(transaction):
+    """Signal that we're ready to commit a transaction.
+
+    Currently just used to signal to the commit batch that we're not going to
+    need to call `AllocateIds`, because we're ready to commit now.
+
+    Args:
+        transaction (bytes): The transaction id about to be committed.
+    """
+    batch = _get_commit_batch(transaction, _options.Options())
+    batch.preparing_to_commit = True
+
+
 def commit(transaction, retries=None, timeout=None):
     """Commit a transaction.
 
@@ -555,7 +580,7 @@ def _get_commit_batch(transaction, options):
     # call would all need to be identical. For now, no options are supported
     # here.
     for key, value in options.items():
-        if value:
+        if key != "transaction" and value:
             raise NotImplementedError("Passed bad option: {!r}".format(key))
 
     # Since we're in a transaction, we need to hang on to the batch until
@@ -605,6 +630,7 @@ class _TransactionalCommitBatch(_NonTransactionalCommitBatch):
         self.allocating_ids = []
         self.incomplete_mutations = []
         self.incomplete_futures = []
+        self.preparing_to_commit = False
 
     def put(self, entity_pb):
         """Add an entity to batch to be stored.
@@ -657,8 +683,9 @@ class _TransactionalCommitBatch(_NonTransactionalCommitBatch):
 
     def idle_callback(self):
         """Call AllocateIds on any incomplete keys in the batch."""
-        if not self.incomplete_mutations:
-            # This will happen if `commit` is called first.
+        # If there are no incomplete mutations, or if we're already preparing
+        # to commit, there's no need to allocate ids.
+        if self.preparing_to_commit or not self.incomplete_mutations:
             return
 
         # Signal to a future commit that there is an id allocation in
@@ -727,11 +754,6 @@ class _TransactionalCommitBatch(_NonTransactionalCommitBatch):
         for future in self.allocating_ids:
             if not future.done():
                 yield future
-
-        # Head off making any more AllocateId calls. Any remaining incomplete
-        # keys will get ids as part of the Commit call.
-        self.incomplete_mutations = []
-        self.incomplete_futures = []
 
         future = tasklets.Future("Commit")
         futures = self.futures

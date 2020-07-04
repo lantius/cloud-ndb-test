@@ -1,5 +1,5 @@
 enum34
 googleapis_common_protos
-google-cloud-ndb
+google-cloud-ndb==1.4.0
 requests
 six

@@ -3990,17 +3990,29 @@ class StructuredProperty(Property):
         """Dynamically get a subproperty."""
         # Optimistically try to use the dict key.
         prop = self._model_class._properties.get(attrname)
+
+        # We're done if we have a hit and _code_name matches.
+        if prop is None or prop._code_name != attrname:
+            # Otherwise, use linear search looking for a matching _code_name.
+            for candidate in self._model_class._properties.values():
+                if candidate._code_name == attrname:
+                    prop = candidate
+                    break
+
         if prop is None:
             raise AttributeError(
                 "Model subclass %s has no attribute %s"
                 % (self._model_class.__name__, attrname)
             )
+
         prop_copy = copy.copy(prop)
         prop_copy._name = self._name + "." + prop_copy._name
+
         # Cache the outcome, so subsequent requests for the same attribute
         # name will get the copied property directly rather than going
         # through the above motions all over again.
         setattr(self, attrname, prop_copy)
+
         return prop_copy
 
     def _comparison(self, op, value):
@@ -4334,7 +4346,15 @@ class LocalStructuredProperty(BlobProperty):
         if isinstance(value, bytes):
             pb = entity_pb2.Entity()
             pb.MergeFromString(value)
-            value = helpers.entity_from_protobuf(pb)
+            entity_value = helpers.entity_from_protobuf(pb)
+            if not entity_value.keys():
+                # No properties. Maybe dealing with legacy pb format.
+                from google.cloud.ndb._legacy_entity_pb import EntityProto
+
+                pb = EntityProto()
+                pb.MergePartialFromString(value)
+                entity_value.update(pb.entity_props())
+            value = entity_value
         if not self._keep_keys and value.key:
             value.key = None
         return _entity_from_ds_entity(value, model_class=self._model_class)
@@ -4751,13 +4771,13 @@ class Model(_NotEqualMixin):
             project = app
 
         key_parts_unspecified = (
-            id_ is None and parent is None and project is None
+            id_ is None
+            and parent is None
+            and project is None
+            and namespace is key_module.UNDEFINED
         )
         if key is not None:
-            if (
-                not key_parts_unspecified
-                or namespace is not key_module.UNDEFINED
-            ):
+            if not key_parts_unspecified:
                 raise exceptions.BadArgumentError(
                     "Model constructor given 'key' does not accept "
                     "'id', 'project', 'app', 'namespace', or 'parent'."
@@ -5952,8 +5972,27 @@ class Model(_NotEqualMixin):
         """Return the code name from a property when it's different from the
         stored name. Used in deserialization from datastore."""
         if name in cls._properties:
-            if name != cls._properties[name]._code_name:
-                name = cls._properties[name]._code_name
+            return cls._properties[name]._code_name
+
+        # If name isn't in cls._properties but there is a property with that
+        # name, it means that property has a different codename, and returning
+        # this name will potentially clobber the real property.  Take for
+        # example:
+        #
+        # class SomeKind(ndb.Model):
+        #     foo = ndb.IntegerProperty(name="bar")
+        #
+        # If we are passed "bar", we know to translate that to "foo", becasue
+        # the datastore property, "bar", is the NDB property, "foo". But if we
+        # are passed "foo", here, then that must be the datastore property,
+        # "foo", which isn't even mapped to anything in the NDB model.
+        #
+        prop = getattr(cls, name, None)
+        if prop:
+            # Won't map to a property, so this datastore property will be
+            # effectively ignored.
+            return " "
+
         return name
 
     @classmethod

@@ -6,8 +6,8 @@ import webapp2
 import six
 reload(six)
 
-from appenginendb import read_thread, write_to_thread
-#from cloudndb import read_thread, write_to_thread
+#from appenginendb import read_thread, write_to_thread
+from cloudndb import read_thread, write_to_thread
 
 class Main(webapp2.RequestHandler):
   def get(self):

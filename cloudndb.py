@@ -1,7 +1,6 @@
 from google.cloud import ndb
-# from requests import post
-VERSION = 'cloud-ndb'
 
+VERSION = 'cloud-ndb'
 
 class ThreadMessage(ndb.Model):
   """Models the individual messages in a thread."""
@@ -49,30 +48,3 @@ def write_to_thread(text):
     message = ThreadMessage(number=number, text=text)
     thread.messages.append(message)
     thread.put()
-
-
-def reset_datastore():
-  post("http://localhost:8089/reset")
-  print("Resetting datastore!")
-
-
-if __name__ == '__main__':
-  response = 0
-  client = ndb.Client()
-  with client.context():
-    while response != 4:
-      print("Choose action:")
-      print("1. Read current messages")
-      print("2. Write a new message")
-      print("3. Reset datastore")
-      print("4. Quit")
-      response = input("Action to take: ")
-
-      if response == 1:
-        read_thread()
-      elif response == 2:
-        text = raw_input("What message to write?: ")
-        write_to_thread(text)
-      elif response == 3:
-        reset_datastore()
-      print("")
